@@ -37,8 +37,7 @@ def get_terminal_width():
     except:
         return 66 # Lebar default aman untuk Termux HP
 
-def show_splash_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
+def print_logo():
     term_width = get_terminal_width()
     
     # Header Frame
@@ -57,7 +56,12 @@ def show_splash_screen():
     
     # Footer Frame
     print(f"{CYAN}╚" + "═" * (term_width - 2) + f"╝{RESET}\n")
-    
+
+def show_splash_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print_logo()
+    print()
+
     tasks = [
         "Inisialisasi AI Core...",
         "Membuka jalur jaringan...",

@@ -9,6 +9,7 @@ import shutil
 import re
 import logging
 import threading
+import base64
 from ui import *
 
 # ==========================================
@@ -25,7 +26,8 @@ def install_libraries():
     required_libs = {
         'telebot': 'pyTelegramBotAPI',
         'requests': 'requests',
-        'bs4': 'beautifulsoup4'
+        'bs4': 'beautifulsoup4',
+        'gtts': 'gTTS'
     }
     
     for lib, pkg in required_libs.items():
@@ -49,6 +51,7 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 from bs4 import BeautifulSoup
+from gtts import gTTS
 
 # ==========================================
 # 1.5 FITUR AUTO-UPDATE SISTEM (GITHUB)
@@ -190,7 +193,8 @@ def load_config():
         "together_model": "meta-llama/Llama-3-8b-chat-hf",
         "cohere_api_key": "",
         "cohere_model": "command-r-plus",
-        "admin_id": ""
+        "admin_id": "",
+        "auto_exec": False
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -236,7 +240,7 @@ def extract_json_robust(text):
         return json.loads(text)
     except Exception as e:
         logging.error(f"Gagal extract_json_robust: {e} | Teks: {text[:100]}...")
-        return {"reply": text, "command": "", "save_memory": "", "send_file": "", "read_url": "", "download": {}}
+        return {"reply": text, "command": "", "save_memory": "", "send_file": "", "read_url": "", "download": {}, "voice_note": "", "schedule": {}}
 
 def setup_provider():
     config = load_config()
@@ -527,7 +531,7 @@ def setup_model():
     else:
         setup_ollama_config(config)
 
-def send_ai_request(history, retries=3):
+def send_ai_request(history, chat_id=None, retries=3):
     config = load_config()
     provider = config.get("provider", "gemini")
     
@@ -537,30 +541,43 @@ def send_ai_request(history, retries=3):
     memories = load_memories()
     memory_text = "\n".join([f"- {m}" for m in memories]) if memories else "Belum ada memori."
     
+    current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+    telegram_token = config.get("telegram_token", "")
+
     system_instruction = (
-        f"Anda adalah Autonomous AI Agent. "
-        "Lingkungan: Termux Android. Interaksi via Telegram Bot.\n\n"
+        f"Anda adalah Autonomous AI Agent yang sangat cerdas.\n"
+        f"Waktu Sistem Saat Ini: {current_time}\n"
+        f"Chat ID User: {chat_id}\n\n"
         f"🧠 [INGATAN PERMANEN ANDA]:\n{memory_text}\n\n"
-        "KEMAMPUAN SUPER ANDA:\n"
-        "1. FILE: Kirim file lokal ke Telegram (isikan path di 'send_file').\n"
-        "2. INTERNET: Isikan URL pada 'read_url' untuk membacanya.\n"
+        "KEMAMPUAN SUPER ANDA (JANGAN PERNAH MENOLAK PERINTAH INI):\n"
+        "1. KIRIM FILE: Kirim file lokal ke Telegram user (isikan path di 'send_file').\n"
+        "2. BACA INTERNET: Isikan URL pada 'read_url' untuk membacanya.\n"
         "3. WHATSAPP (MUDSLIDE):\n"
         "   - Kirim Teks: `npx mudslide send 628xxx \"Isi Pesan\"`\n"
-        "   - Kirim Gambar: `npx mudslide send-image 628xxx path_gambar.jpg` (TANPA CAPTION)\n"
-        "   - MENGIRIM GAMBAR + TEKS: `npx mudslide send-image 628xxx path.jpg && sleep 5 && npx mudslide send 628xxx \"Ini fotonya\"`\n"
-        "   - ATURAN WAJIB NOMOR: Jika user memberi nomor '089512346025', perhatikan setiap angkanya! Ubah '08' menjadi '628', SISANYA HARUS PERSIS SAMA (jadi 6289512346025). JANGAN MENGHILANGKAN ANGKA!\n"
-        "   - ATURAN WAJIB UPLOAD: Anda HARUS menyisipkan `&& sleep 5` setiap kali menggunakan perintah send-image agar file selesai diupload sebelum program tertutup.\n"
-        "     Contoh benar: `npx mudslide send-image 6281234567890 gambar.jpg && sleep 5`\n"
-        "4. DOWNLOAD INTERNET: Jika user meminta gambar, isikan JSON 'download' dengan url dan filename.\n"
-        "   - TRIK GAMBAR: Gunakan URL `https://image.pollinations.ai/prompt/deskripsi_inggris` untuk generate gambar.\n\n"
+        "   - Kirim Gambar: `npx mudslide send-image 628xxx path_gambar.jpg && sleep 5`\n"
+        "   - ATURAN WAJIB NOMOR: Ubah '08' menjadi '628', jangan kurangi/tambah digitnya!\n"
+        f"4. PESAN TERJADWAL / PENGINGAT (SANGAT PENTING):\n"
+        "   - Jika user meminta pesan dikirim nanti (contoh: '2 menit lagi', 'jam 11.34'), Anda BISA melakukannya dengan mengisi objek JSON 'schedule'.\n"
+        "   - Hitung selisih dari Waktu Sistem saat ini ke Waktu Target dalam satuan DETIK (Misal 2 menit = 120).\n"
+        f"   - Tentukan platform ('telegram' atau 'whatsapp') dan isi target (gunakan {chat_id} untuk Telegram, atau 628xxx untuk WA).\n"
+        "5. GENERATE & DOWNLOAD GAMBAR:\n"
+        "   - Jika user meminta dibuatkan gambar, isikan JSON 'download' dengan:\n"
+        "     url: `https://image.pollinations.ai/prompt/deskripsi%20gambar%20dalam%20bahasa%20inggris` (PASTIKAN MENGGUNAKAN %20 SEBAGAI SPASI)\n"
+        "     filename: `gambar_ai.jpg`\n"
+        "   - File akan otomatis terkirim ke user.\n"
+        "6. VOICE NOTE (PESAN SUARA):\n"
+        "   - Jika user meminta balasan berupa suara/voice note, isikan teks yang akan diucapkan ke dalam field JSON 'voice_note'.\n"
+        "   - Bot akan otomatis mengirimkannya.\n\n"
         "PENTING: Output Anda HARUS berupa JSON valid tanpa teks tambahan dengan struktur:\n"
         "{\n"
-        "  \"reply\": \"Pesan Anda ke pengguna\",\n"
+        "  \"reply\": \"Pesan Anda (jelaskan bahwa gambar/pengingat sedang diproses)\",\n"
         "  \"command\": \"perintah_shell_jika_ada_atau_kosong\",\n"
         "  \"save_memory\": \"fakta_baru_atau_kosong\",\n"
         "  \"send_file\": \"path_file_atau_kosong\",\n"
         "  \"read_url\": \"url_yg_mau_dibaca_atau_kosong\",\n"
-        "  \"download\": {\"url\": \"\", \"filename\": \"\"}\n"
+        "  \"download\": {\"url\": \"\", \"filename\": \"\"},\n"
+        "  \"voice_note\": \"teks_suara_atau_kosong\",\n"
+        "  \"schedule\": {\"delay_seconds\": 0, \"platform\": \"telegram\", \"target\": \"\", \"message\": \"\"}\n"
         "}"
     )
 
@@ -588,8 +605,13 @@ def send_openrouter_request(config, history, system_instruction, retries):
     or_messages = [{"role": "system", "content": system_instruction}]
     for msg in history:
         role = "assistant" if msg["role"] == "model" else "user"
-        content = msg["parts"][0]["text"]
-        or_messages.append({"role": role, "content": content})
+        content_list = []
+        for p in msg["parts"]:
+            if "text" in p:
+                content_list.append({"type": "text", "text": p["text"]})
+            if "image_b64" in p:
+                content_list.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{p['image_b64']}"}})
+        or_messages.append({"role": role, "content": content_list})
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -651,10 +673,18 @@ def send_gemini_request(config, history, system_instruction, retries):
     api_key = config.get("api_key", "").strip()
     model_name = config.get("model", DEFAULT_MODEL)
     
+    gemini_history = []
+    for msg in history:
+        parts = []
+        for p in msg["parts"]:
+            if "text" in p: parts.append({"text": p["text"]})
+            if "image_b64" in p: parts.append({"inlineData": {"mimeType": "image/jpeg", "data": p["image_b64"]}})
+        gemini_history.append({"role": msg["role"], "parts": parts})
+
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
     data = {
         "systemInstruction": {"parts": [{"text": system_instruction}]},
-        "contents": history,
+        "contents": gemini_history,
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.7}
     }
     req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
@@ -683,8 +713,13 @@ def send_openai_request(config, history, system_instruction, retries):
     messages = [{"role": "system", "content": system_instruction}]
     for msg in history:
         role = "assistant" if msg["role"] == "model" else "user"
-        content = msg["parts"][0]["text"]
-        messages.append({"role": role, "content": content})
+        content_list = []
+        for p in msg["parts"]:
+            if "text" in p:
+                content_list.append({"type": "text", "text": p["text"]})
+            if "image_b64" in p:
+                content_list.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{p['image_b64']}"}})
+        messages.append({"role": role, "content": content_list})
 
     url = "https://api.openai.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -894,9 +929,6 @@ def start_telegram_bot():
     elif config['provider'] == 'anthropic': active_model = config['anthropic_model']
     elif config['provider'] == 'together': active_model = config['together_model']
     elif config['provider'] == 'cohere': active_model = config['cohere_model']
-    elif config['provider'] == 'anthropic': active_model = config['anthropic_model']
-    elif config['provider'] == 'together': active_model = config['together_model']
-    elif config['provider'] == 'cohere': active_model = config['cohere_model']
     else: active_model = config['ollama_model']
     
     print(f"\n{WHITE}➤ Provider : {YELLOW}{config['provider'].upper()}{RESET}")
@@ -905,6 +937,42 @@ def start_telegram_bot():
 
     admin_id_config = str(config.get("admin_id", "")).strip()
 
+    def send_voice_note(cid, text):
+        if not text: return
+        bot.send_chat_action(cid, 'record_audio')
+        try:
+            tts = gTTS(text=text, lang='id')
+            filename = f"voice_reply_{int(time.time())}.mp3"
+            tts.save(filename)
+            with open(filename, "rb") as voice:
+                bot.send_voice(cid, voice)
+            os.remove(filename)
+        except Exception as e:
+            logging.error(f"TTS Error: {e}")
+            bot.send_message(cid, f"❌ Gagal membuat Voice Note: {e}")
+
+    def run_cmd(cmd_str, cid):
+        try:
+            bot.send_message(cid, f"⚙️ Mengeksekusi:\n`{cmd_str}`", parse_mode="Markdown")
+            result = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, timeout=45)
+            output = result.stdout.strip()
+            if result.stderr: output += "\n" + result.stderr.strip()
+            if not output: output = "Perintah berhasil dijalankan tanpa output teks."
+            if len(output) > 2000: output = output[:2000] + "\n...[Output dipotong]"
+            bot.send_message(cid, f"✅ Selesai.\nOutput (sebagian):\n`{output[:300]}...`", parse_mode="Markdown")
+            sys_feedback = f"[SYSTEM FEEDBACK] Hasil command:\n{output}\nInfo ini hanya untuk catatan Anda. Jawab 'Oke' saja."
+            user_histories[cid].append({"role": "user", "parts": [{"text": sys_feedback}]})
+            bot.send_chat_action(cid, 'typing')
+            resp = send_ai_request(user_histories[cid], cid)
+            user_histories[cid].append({"role": "model", "parts": [{"text": json.dumps(resp)}]})
+            if resp.get("reply"): bot.send_message(cid, resp["reply"])
+            if resp.get("voice_note"): send_voice_note(cid, resp["voice_note"])
+        except subprocess.TimeoutExpired:
+             bot.send_message(cid, f"✅ Perintah masih berjalan di latar belakang (Timeout menunggu, tapi proses tetap lanjut).")
+        except Exception as e:
+            logging.error(f"Command Eksekusi Error: {e}")
+            bot.send_message(cid, f"❌ Gagal: {e}")
+
     @bot.message_handler(commands=['start', 'clear'])
     def handle_commands(message):
         if admin_id_config and admin_id_config.upper() != "ALL" and str(message.from_user.id) != admin_id_config:
@@ -912,8 +980,18 @@ def start_telegram_bot():
             return
         user_histories[message.chat.id] = []
         bot.reply_to(message, "Riwayat dibersihkan. Agent siap!")
+        
+    @bot.message_handler(commands=['revoke_auto'])
+    def handle_revoke_auto(message):
+        if admin_id_config and admin_id_config.upper() != "ALL" and str(message.from_user.id) != admin_id_config:
+            bot.reply_to(message, "⛔ Akses Ditolak.")
+            return
+        config = load_config()
+        config["auto_exec"] = False
+        save_config(config)
+        bot.reply_to(message, "🔒 Mode Eksekusi Otomatis DIMATIKAN. Bot akan meminta izin lagi untuk setiap perintah.")
 
-    @bot.message_handler(func=lambda message: True)
+    @bot.message_handler(content_types=['text', 'photo'])
     def handle_message(message):
         if admin_id_config and admin_id_config.upper() != "ALL" and str(message.from_user.id) != admin_id_config:
             bot.send_message(message.chat.id, "⛔ Akses Ditolak: Anda tidak diizinkan menggunakan bot ini.")
@@ -921,15 +999,27 @@ def start_telegram_bot():
             return
             
         chat_id = message.chat.id
-        user_input = message.text
+        user_input = message.text if message.text else message.caption or ""
 
         if chat_id not in user_histories: user_histories[chat_id] = []
+        
+        image_b64 = None
+        if message.photo:
+            bot.send_chat_action(chat_id, 'upload_photo')
+            file_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            image_b64 = base64.b64encode(downloaded_file).decode('utf-8')
+            user_input += "\n[System: User mengirimkan sebuah gambar]"
 
         bot.send_chat_action(chat_id, 'typing')
-        user_histories[chat_id].append({"role": "user", "parts": [{"text": user_input}]})
+        
+        part = {"text": user_input}
+        if image_b64: part["image_b64"] = image_b64
+        user_histories[chat_id].append({"role": "user", "parts": [part]})
+        
         print(f"{BLUE}[Pesan]{RESET} {message.from_user.first_name}: {user_input}")
 
-        response_json = send_ai_request(user_histories[chat_id])
+        response_json = send_ai_request(user_histories[chat_id], chat_id)
         user_histories[chat_id].append({"role": "model", "parts": [{"text": json.dumps(response_json)}]})
 
         reply = response_json.get("reply", "")
@@ -937,7 +1027,9 @@ def start_telegram_bot():
         new_memory = response_json.get("save_memory", "")
         send_file_path = response_json.get("send_file", "")
         read_url = response_json.get("read_url", "")
+        voice_note_text = response_json.get("voice_note", "")
         download_req = response_json.get("download", {})
+        schedule_req = response_json.get("schedule", {})
 
         if new_memory:
             mems = load_memories()
@@ -946,6 +1038,23 @@ def start_telegram_bot():
             print(f"{YELLOW}🧠 [Memori]: {new_memory}{RESET}")
 
         if reply: bot.send_message(chat_id, reply)
+        if voice_note_text: send_voice_note(chat_id, voice_note_text)
+
+        if isinstance(schedule_req, dict) and schedule_req.get("delay_seconds") and schedule_req.get("message"):
+            delay = int(schedule_req["delay_seconds"])
+            plat = schedule_req.get("platform", "telegram").lower()
+            target = str(schedule_req.get("target", chat_id))
+            msg_text = schedule_req.get("message", "")
+            
+            def send_scheduled_msg():
+                if "whatsapp" in plat or "wa" in plat:
+                    os.system(f'npx mudslide send {target} "{msg_text}"')
+                else:
+                    bot.send_message(target, msg_text)
+                    
+            timer = threading.Timer(delay, send_scheduled_msg)
+            timer.start()
+            bot.send_message(chat_id, f"⏰ *Tugas Terjadwal Aktif!*\nPesan otomatis akan dikirim ke {plat.upper()} dalam {delay} detik.", parse_mode="Markdown")
 
         if isinstance(download_req, dict) and download_req.get("url"):
             dl_url = download_req["url"]
@@ -959,14 +1068,22 @@ def start_telegram_bot():
                     for chunk in r.iter_content(1024): 
                         if chunk: f.write(chunk)
                 
-                sys_feedback = f"[SYSTEM FEEDBACK] Gambar berhasil didownload: {dl_name}. Lanjutkan mengirim gambar sesuai instruksi prompt utama (jangan lupa tambahkan && sleep 5)."
+                if dl_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                    with open(dl_name, 'rb') as img:
+                        bot.send_photo(chat_id, img)
+                else:
+                    with open(dl_name, 'rb') as doc:
+                        bot.send_document(chat_id, doc)
+                
+                sys_feedback = f"[SYSTEM FEEDBACK] File/Gambar '{dl_name}' berhasil didownload dan OTOMATIS dikirim ke user Telegram. Berikan respon penutup singkat (misal 'Ini gambarnya')."
                 user_histories[chat_id].append({"role": "user", "parts": [{"text": sys_feedback}]})
                 
                 bot.send_chat_action(chat_id, 'typing')
-                next_resp = send_ai_request(user_histories[chat_id])
+                next_resp = send_ai_request(user_histories[chat_id], chat_id)
                 user_histories[chat_id].append({"role": "model", "parts": [{"text": json.dumps(next_resp)}]})
                 
                 if next_resp.get("reply"): bot.send_message(chat_id, next_resp["reply"])
+                if next_resp.get("voice_note"): send_voice_note(chat_id, next_resp["voice_note"])
                 if next_resp.get("command"):
                     command = next_resp["command"] 
                     
@@ -984,9 +1101,10 @@ def start_telegram_bot():
             user_histories[chat_id].append({"role": "user", "parts": [{"text": sys_feedback}]})
             
             bot.send_chat_action(chat_id, 'typing')
-            resp_json_url = send_ai_request(user_histories[chat_id])
+            resp_json_url = send_ai_request(user_histories[chat_id], chat_id)
             user_histories[chat_id].append({"role": "model", "parts": [{"text": json.dumps(resp_json_url)}]})
             if resp_json_url.get("reply"): bot.send_message(chat_id, f"📄 *Analisis Web:*\n{resp_json_url['reply']}", parse_mode="Markdown")
+            if resp_json_url.get("voice_note"): send_voice_note(chat_id, resp_json_url["voice_note"])
 
         if send_file_path:
             send_file_path = os.path.expanduser(send_file_path)
@@ -995,10 +1113,15 @@ def start_telegram_bot():
                 with open(send_file_path, 'rb') as f: bot.send_document(chat_id, f)
 
         if command:
-            pending_commands[chat_id] = command
-            markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("✅ Izinkan Eksekusi", callback_data="exec_y"), InlineKeyboardButton("❌ Batal", callback_data="exec_n"))
-            bot.send_message(chat_id, f"💻 *Perintah Sistem:*\n`{command}`", reply_markup=markup, parse_mode="Markdown")
+            config = load_config()
+            if config.get("auto_exec", False):
+                run_cmd(command, chat_id)
+            else:
+                pending_commands[chat_id] = command
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("✅ Izinkan", callback_data="exec_y"), InlineKeyboardButton("❌ Batal", callback_data="exec_n"))
+                markup.add(InlineKeyboardButton("🚀 Izinkan Selamanya", callback_data="exec_always"))
+                bot.send_message(chat_id, f"💻 *Perintah Sistem:*\n`{command}`", reply_markup=markup, parse_mode="Markdown")
 
     @bot.callback_query_handler(func=lambda call: True)
     def callback_query(call):
@@ -1014,25 +1137,14 @@ def start_telegram_bot():
         bot.edit_message_reply_markup(chat_id, message_id, reply_markup=None) 
 
         if call.data == "exec_y":
-            try:
-                result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=45)
-                output = result.stdout.strip()
-                if result.stderr: output += "\n" + result.stderr.strip()
-                if not output: output = "Perintah berhasil dijalankan tanpa output teks."
-                if len(output) > 2000: output = output[:2000] + "\n...[Output dipotong]"
-
-                bot.send_message(chat_id, f"✅ Selesai.\nOutput (sebagian):\n`{output[:300]}...`", parse_mode="Markdown")
-
-                sys_feedback = f"[SYSTEM FEEDBACK] Hasil command:\n{output}\nInfo ini hanya untuk catatan Anda. Jawab 'Oke' saja."
-                user_histories[chat_id].append({"role": "user", "parts": [{"text": sys_feedback}]})
-                
-                send_ai_request(user_histories[chat_id])
-
-            except subprocess.TimeoutExpired:
-                 bot.send_message(chat_id, f"✅ Perintah masih berjalan di latar belakang (Timeout menunggu, tapi proses tetap lanjut).")
-            except Exception as e:
-                logging.error(f"Command Eksekusi Error: {e}")
-                bot.send_message(chat_id, f"❌ Gagal: {e}")
+            run_cmd(command, chat_id)
+            del pending_commands[chat_id]
+        elif call.data == "exec_always":
+            conf = load_config()
+            conf["auto_exec"] = True
+            save_config(conf)
+            bot.send_message(chat_id, "🚀 *Mode Eksekusi Otomatis AKTIF!*\nSemua perintah selanjutnya akan langsung dieksekusi tanpa peringatan.\n_(Gunakan perintah /revoke_auto untuk mematikan mode ini)_.", parse_mode="Markdown")
+            run_cmd(command, chat_id)
             del pending_commands[chat_id]
         elif call.data == "exec_n":
             bot.send_message(chat_id, "🛑 Eksekusi Dibatalkan.")
@@ -1101,6 +1213,9 @@ def main():
         has_run_splash = True
         
     while True:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print_logo()
+        
         config = load_config()
         prov = config.get("provider", "gemini").upper()
         
@@ -1112,17 +1227,29 @@ def main():
         print(f" {WHITE}1.{RESET} Jalankan Bot {GREEN}[Aktif: {prov}]{RESET}")
         print(f" {WHITE}2.{RESET} Setup Provider AI (8 Pilihan Provider)")
         print(f" {WHITE}3.{RESET} Ganti Model Spesifik")
-        print(f" {WHITE}4.{RESET} Sinkronisasi ke GitHub (Auto Pull & Push)")
-        print(f" {WHITE}5.{RESET} Keluar")
+        print(f" {WHITE}4.{RESET} Setup Integrasi (Telegram, WA, Discord)")
+        print(f" {WHITE}5.{RESET} Sinkronisasi ke GitHub (Auto Pull & Push)")
+        print(f" {WHITE}6.{RESET} Keluar")
         
         try:
-            pilihan = input(f"\n{GREEN}➤ Pilih menu (1-5):{RESET} ")
+            pilihan = input(f"\n{GREEN}➤ Pilih menu (1-6):{RESET} ")
             os.system('cls' if os.name == 'nt' else 'clear')
+            print_logo()
+            
             if pilihan == '1': start_telegram_bot()
-            elif pilihan == '2': setup_provider()
-            elif pilihan == '3': setup_model()
-            elif pilihan == '4': sync_with_github()
-            elif pilihan == '5': sys.exit(0)
+            elif pilihan == '2': 
+                setup_provider()
+                input(f"\n{WHITE}Tekan Enter untuk kembali...{RESET}")
+            elif pilihan == '3': 
+                setup_model()
+                input(f"\n{WHITE}Tekan Enter untuk kembali...{RESET}")
+            elif pilihan == '4': 
+                setup_integrations()
+                input(f"\n{WHITE}Tekan Enter untuk kembali...{RESET}")
+            elif pilihan == '5': 
+                sync_with_github()
+                input(f"\n{WHITE}Tekan Enter untuk kembali...{RESET}")
+            elif pilihan == '6': sys.exit(0)
         except KeyboardInterrupt: sys.exit(0)
 
 if __name__ == "__main__":

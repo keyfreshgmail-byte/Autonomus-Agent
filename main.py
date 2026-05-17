@@ -68,6 +68,12 @@ def route_provider(provider: str, model: str, prompt: str, system_context: str) 
     elif prov == "anthropic":
         from providers.anthropic_provider import generate
         return generate(prompt, system_context, model, Config.ANTHROPIC_API_KEY, Config.TIMEOUT)
+    elif prov == "together":
+        from providers.together_provider import generate
+        return generate(prompt, system_context, model, Config.TOGETHER_API_KEY, Config.TIMEOUT)
+    elif prov == "cohere":
+        from providers.cohere_provider import generate
+        return generate(prompt, system_context, model, Config.COHERE_API_KEY, Config.TIMEOUT)
     elif prov == "ollama":
         from providers.ollama_provider import generate
         return generate(prompt, system_context, model, Config.OLLAMA_BASE_URL, Config.TIMEOUT)
