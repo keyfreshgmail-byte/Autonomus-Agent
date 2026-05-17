@@ -8,6 +8,7 @@ import time
 import shutil
 import re
 import logging
+import threading
 from ui import *
 
 # ==========================================
@@ -48,6 +49,58 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 from bs4 import BeautifulSoup
+
+# ==========================================
+# 1.5 FITUR AUTO-UPDATE SISTEM (GITHUB)
+# ==========================================
+def check_for_updates():
+    print(f"{CYAN}--- Pengecekan Pembaruan Sistem ---{RESET}")
+    if not shutil.which("git") or not os.path.exists(".git"):
+        print(f"Status Sistem                 [{YELLOW}Git Tidak Terdeteksi{RESET}]")
+        return
+        
+    try:
+        print(f"Mengecek versi terbaru...        ", end="\r")
+        subprocess.run(["git", "fetch"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        status = subprocess.run(["git", "status", "-uno"], capture_output=True, text=True)
+        if "Your branch is behind" in status.stdout:
+            print(f"Status Sistem                 [{YELLOW}Update Ditemukan, Mengunduh...{RESET}]")
+            pull_res = subprocess.run(["git", "pull", "origin", "main"], capture_output=True, text=True)
+            
+            if pull_res.returncode == 0:
+                print(f"Status Sistem                 [{GREEN}Diperbarui! Memulai ulang...{RESET}]")
+                time.sleep(2)
+                # Restart program otomatis dengan kode versi terbaru
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            else:
+                print(f"Status Sistem                 [{RED}Gagal Mengunduh Update{RESET}]")
+        else:
+            print(f"Status Sistem                 [{GREEN}Up-to-Date{RESET}]")
+    except Exception as e:
+        logging.error(f"Auto-update error: {e}")
+        print(f"Status Sistem                 [{RED}Error Cek Update{RESET}]")
+
+def background_update_checker():
+    """Mengecek pembaruan secara berkala (lifetime) tanpa mengganggu bot yang sedang berjalan."""
+    while True:
+        time.sleep(60) # Pengecekan otomatis dilakukan setiap 60 detik
+        try:
+            subprocess.run(["git", "fetch"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            status = subprocess.run(["git", "status", "-uno"], capture_output=True, text=True)
+            if "Your branch is behind" in status.stdout:
+                logging.info("Update dari GitHub terdeteksi! Merestart bot...")
+                print(f"\n{YELLOW}📥 Update otomatis terdeteksi! Mengunduh pembaruan dan melanjutkan program...{RESET}")
+                pull_res = subprocess.run(["git", "pull", "origin", "main"], capture_output=True, text=True)
+                
+                if pull_res.returncode == 0:
+                    args = sys.argv[:]
+                    # Tambahkan argumen khusus agar bot melewati menu saat restart
+                    if "--run-bot" not in args: args.append("--run-bot")
+                    # Hentikan program dan ganti dengan versi terbarunya secara instan
+                    os.execv(sys.executable, [sys.executable] + args)
+        except Exception as e:
+            logging.error(f"Background update error: {e}")
 
 # ==========================================
 # 2. FITUR AUTO-CHECK (TERMUX:API & WA CLI)
@@ -116,7 +169,11 @@ def load_config():
         "ollama_url": DEFAULT_OLLAMA_URL, 
         "ollama_model": DEFAULT_OLLAMA_MODEL,
         "openrouter_api_key": "",
-        "openrouter_model": DEFAULT_OPENROUTER_MODEL
+        "openrouter_model": DEFAULT_OPENROUTER_MODEL,
+        "openai_api_key": "",
+        "openai_model": "gpt-4o-mini",
+        "groq_api_key": "",
+        "groq_model": "llama-3.3-70b-versatile"
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -171,8 +228,15 @@ def setup_provider():
     print("1. Google Gemini (Cloud / API Key)")
     print("2. Ollama (Local AI / Tanpa Internet)")
     print("3. OpenRouter (Gemma 4, Claude, dll)")
+    print("4. OpenAI (ChatGPT)")
+    print("5. Groq (Llama 3, Mixtral - Super Cepat)")
+    print(f"{RED}0. Batal / Kembali ke Menu Utama{RESET}")
     
-    pilihan = input(f"\n{GREEN}Pilih provider (1/2/3):{RESET} ").strip()
+    pilihan = input(f"\n{GREEN}Pilih provider (0-5):{RESET} ").strip()
+    os.system('cls' if os.name == 'nt' else 'clear')
+    if pilihan == '0':
+        print("Dibatalkan.")
+        return
     if pilihan == '1':
         config["provider"] = "gemini"
         save_config(config)
@@ -188,6 +252,16 @@ def setup_provider():
         save_config(config)
         print(f"{BLUE}[Berhasil]{RESET} Provider diubah ke OpenRouter.")
         setup_openrouter_credentials(config)
+    elif pilihan == '4':
+        config["provider"] = "openai"
+        save_config(config)
+        print(f"{BLUE}[Berhasil]{RESET} Provider diubah ke OpenAI.")
+        setup_openai_credentials(config)
+    elif pilihan == '5':
+        config["provider"] = "groq"
+        save_config(config)
+        print(f"{BLUE}[Berhasil]{RESET} Provider diubah ke Groq.")
+        setup_groq_credentials(config)
     else:
         print(f"{RED}[Error]{RESET} Pilihan tidak valid.")
 
@@ -195,11 +269,13 @@ def setup_gemini_credentials(config=None):
     if not config: config = load_config()
     print(f"\n{CYAN}--- Setup Gemini & Telegram ---{RESET}")
     if config.get("api_key"): print(f"{YELLOW}Gemini API Key sudah tersimpan.{RESET}")
-    key = input(f"{GREEN}Masukkan Gemini API Key (kosongkan jika tidak ganti):{RESET} ").strip()
+    key = input(f"{GREEN}Masukkan Gemini API Key (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if key == '0': return
     if key: config["api_key"] = key
             
     if config.get("telegram_token"): print(f"{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
-    token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
+    token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if token == '0': return
     if token: config["telegram_token"] = token
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi Gemini disimpan!\n")
@@ -208,12 +284,14 @@ def setup_openrouter_credentials(config=None):
     if not config: config = load_config()
     print(f"\n{CYAN}--- Setup OpenRouter & Telegram ---{RESET}")
     if config.get("openrouter_api_key"): print(f"{YELLOW}OpenRouter API Key sudah tersimpan.{RESET}")
-    key = input(f"{GREEN}Masukkan OpenRouter API Key (kosongkan jika tidak ganti):{RESET} ").strip()
+    key = input(f"{GREEN}Masukkan OpenRouter API Key (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if key == '0': return
     if key: config["openrouter_api_key"] = key
     
     curr_model = config.get("openrouter_model", DEFAULT_OPENROUTER_MODEL)
     print(f"\n{YELLOW}Model OpenRouter saat ini: {curr_model}{RESET}")
-    model = input(f"{GREEN}Masukkan Model (kosongkan untuk tetap {curr_model}):{RESET} ").strip()
+    model = input(f"{GREEN}Masukkan Model (kosongkan untuk tetap {curr_model}, '0' batal):{RESET} ").strip()
+    if model == '0': return
     if model: config["openrouter_model"] = model
             
     if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
@@ -223,18 +301,60 @@ def setup_openrouter_credentials(config=None):
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi OpenRouter disimpan!\n")
 
+def setup_openai_credentials(config=None):
+    if not config: config = load_config()
+    print(f"\n{CYAN}--- Setup OpenAI & Telegram ---{RESET}")
+    if config.get("openai_api_key"): print(f"{YELLOW}OpenAI API Key sudah tersimpan.{RESET}")
+    key = input(f"{GREEN}Masukkan OpenAI API Key (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if key == '0': return
+    if key: config["openai_api_key"] = key
+    
+    curr_model = config.get("openai_model", "gpt-4o-mini")
+    print(f"\n{YELLOW}Model OpenAI saat ini: {curr_model}{RESET}")
+    model = input(f"{GREEN}Masukkan Model (kosongkan untuk tetap {curr_model}, '0' batal):{RESET} ").strip()
+    if model == '0': return
+    if model: config["openai_model"] = model
+            
+    if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
+    token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
+    if token: config["telegram_token"] = token
+    save_config(config)
+    print(f"{BLUE}[Selesai]{RESET} Konfigurasi OpenAI disimpan!\n")
+
+def setup_groq_credentials(config=None):
+    if not config: config = load_config()
+    print(f"\n{CYAN}--- Setup Groq & Telegram ---{RESET}")
+    if config.get("groq_api_key"): print(f"{YELLOW}Groq API Key sudah tersimpan.{RESET}")
+    key = input(f"{GREEN}Masukkan Groq API Key (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if key == '0': return
+    if key: config["groq_api_key"] = key
+    
+    curr_model = config.get("groq_model", "llama-3.3-70b-versatile")
+    print(f"\n{YELLOW}Model Groq saat ini: {curr_model}{RESET}")
+    model = input(f"{GREEN}Masukkan Model (kosongkan untuk tetap {curr_model}, '0' batal):{RESET} ").strip()
+    if model == '0': return
+    if model: config["groq_model"] = model
+            
+    if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
+    token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
+    if token: config["telegram_token"] = token
+    save_config(config)
+    print(f"{BLUE}[Selesai]{RESET} Konfigurasi Groq disimpan!\n")
+
 def setup_ollama_config(config=None):
     if not config: config = load_config()
     print(f"\n{CYAN}--- Setup Ollama & Telegram ---{RESET}")
     
     curr_url = config.get("ollama_url", DEFAULT_OLLAMA_URL)
     print(f"{YELLOW}URL Ollama saat ini: {curr_url}{RESET}")
-    url = input(f"{GREEN}Masukkan URL Ollama (kosongkan jika tidak ganti):{RESET} ").strip()
+    url = input(f"{GREEN}Masukkan URL Ollama (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if url == '0': return
     if url: config["ollama_url"] = url
     
     curr_model = config.get("ollama_model", DEFAULT_OLLAMA_MODEL)
     print(f"\n{YELLOW}Model Ollama saat ini: {curr_model}{RESET}")
-    model = input(f"{GREEN}Masukkan Nama Model:{RESET} ").strip()
+    model = input(f"{GREEN}Masukkan Nama Model (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if model == '0': return
     if model: config["ollama_model"] = model
     
     if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
@@ -249,13 +369,22 @@ def setup_model():
     if config["provider"] == "gemini":
         print(f"\n{CYAN}--- Pilih Model Gemini ---{RESET}")
         for key, name in AVAILABLE_GEMINI_MODELS.items(): print(f"{key}. {name}")
-        pilihan = input(f"\n{GREEN}Pilih nomor model:{RESET} ").strip()
+        print(f"{RED}0. Batal / Kembali{RESET}")
+        pilihan = input(f"\n{GREEN}Pilih nomor model (0 untuk batal):{RESET} ").strip()
+        os.system('cls' if os.name == 'nt' else 'clear')
+        if pilihan == '0':
+            print("Dibatalkan.")
+            return
         if pilihan in AVAILABLE_GEMINI_MODELS:
             config["model"] = AVAILABLE_GEMINI_MODELS[pilihan]
             save_config(config)
             print(f"{BLUE}[Berhasil]{RESET} Model diubah menjadi {AVAILABLE_GEMINI_MODELS[pilihan]}\n")
     elif config["provider"] == "openrouter":
         setup_openrouter_credentials(config)
+    elif config["provider"] == "openai":
+        setup_openai_credentials(config)
+    elif config["provider"] == "groq":
+        setup_groq_credentials(config)
     else:
         setup_ollama_config(config)
 
@@ -300,6 +429,10 @@ def send_ai_request(history, retries=3):
         return send_gemini_request(config, history, system_instruction, retries)
     elif provider == "openrouter":
         return send_openrouter_request(config, history, system_instruction, retries)
+    elif provider == "openai":
+        return send_openai_request(config, history, system_instruction, retries)
+    elif provider == "groq":
+        return send_groq_request(config, history, system_instruction, retries)
     else:
         return send_ollama_request(config, history, system_instruction)
 
@@ -398,6 +531,60 @@ def send_gemini_request(config, history, system_instruction, retries):
             return {"reply": f"Terjadi kesalahan Gemini: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
     return {"reply": "Error: Terlalu banyak request (429).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
 
+def send_openai_request(config, history, system_instruction, retries):
+    api_key = config.get("openai_api_key", "").strip()
+    model_name = config.get("openai_model", "gpt-4o-mini")
+    
+    messages = [{"role": "system", "content": system_instruction}]
+    for msg in history:
+        role = "assistant" if msg["role"] == "model" else "user"
+        content = msg["parts"][0]["text"]
+        messages.append({"role": role, "content": content})
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model_name, "messages": messages, "temperature": 0.7}
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            content = data['choices'][0]['message']['content']
+            return extract_json_robust(content)
+        except Exception as e:
+            if attempt == retries - 1:
+                logging.error(f"OpenAI Error: {e}")
+                return {"reply": f"Error OpenAI: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+    return {"reply": "Gagal merespons (OpenAI).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+
+def send_groq_request(config, history, system_instruction, retries):
+    api_key = config.get("groq_api_key", "").strip()
+    model_name = config.get("groq_model", "llama-3.3-70b-versatile")
+    
+    messages = [{"role": "system", "content": system_instruction}]
+    for msg in history:
+        role = "assistant" if msg["role"] == "model" else "user"
+        content = msg["parts"][0]["text"]
+        messages.append({"role": role, "content": content})
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model_name, "messages": messages, "temperature": 0.7}
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            content = data['choices'][0]['message']['content']
+            return extract_json_robust(content)
+        except Exception as e:
+            if attempt == retries - 1:
+                logging.error(f"Groq Error: {e}")
+                return {"reply": f"Error Groq: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+    return {"reply": "Gagal merespons (Groq).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+
 def send_ollama_request(config, history, system_instruction):
     ollama_url = config.get("ollama_url", DEFAULT_OLLAMA_URL).rstrip("/")
     model_name = config.get("ollama_model", DEFAULT_OLLAMA_MODEL)
@@ -452,6 +639,10 @@ def start_telegram_bot():
     if not telegram_token:
         print(f"{RED}[Error]{RESET} Telegram Token belum disetup!")
         return
+        
+    # Nyalakan sensor auto-update di latar belakang selama bot hidup
+    updater_thread = threading.Thread(target=background_update_checker, daemon=True)
+    updater_thread.start()
 
     bot = telebot.TeleBot(telegram_token)
     
@@ -470,6 +661,8 @@ def start_telegram_bot():
     
     if config['provider'] == 'gemini': active_model = config['model']
     elif config['provider'] == 'openrouter': active_model = config['openrouter_model']
+    elif config['provider'] == 'openai': active_model = config['openai_model']
+    elif config['provider'] == 'groq': active_model = config['groq_model']
     else: active_model = config['ollama_model']
     
     print(f"\n{WHITE}➤ Provider : {YELLOW}{config['provider'].upper()}{RESET}")
@@ -646,8 +839,15 @@ has_run_splash = False
 
 def main():
     global has_run_splash
+    
+    # Bypass menu jika bot direstart oleh proses Lifetime Auto-Update
+    if "--run-bot" in sys.argv:
+        start_telegram_bot()
+        return
+        
     if not has_run_splash:
         show_splash_screen()
+        check_for_updates()
         check_dependencies()
         print(f"\n{CYAN}--------------------------------------------------------------{RESET}\n")
         has_run_splash = True
@@ -669,6 +869,7 @@ def main():
         
         try:
             pilihan = input(f"\n{GREEN}➤ Pilih menu (1-5):{RESET} ")
+            os.system('cls' if os.name == 'nt' else 'clear')
             if pilihan == '1': start_telegram_bot()
             elif pilihan == '2': setup_provider()
             elif pilihan == '3': setup_model()
