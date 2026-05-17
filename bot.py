@@ -7,7 +7,14 @@ import urllib.error
 import time
 import shutil
 import re
+import logging
 from ui import *
+
+# ==========================================
+# SETUP LOGGING
+# ==========================================
+logging.basicConfig(filename='error.log', level=logging.ERROR, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 # ==========================================
 # 1. FITUR AUTO-INSTALL LIBRARY PYTHON
@@ -32,6 +39,7 @@ def install_libraries():
             except Exception as e:
                 print(f"Library {pkg:<25} [{RED}✗{RESET}]")
                 print(f"{RED}[Fatal Error]{RESET} Gagal menginstall {pkg}: {e}")
+                logging.error(f"Gagal menginstall library {pkg}: {e}")
                 sys.exit(1)
 
 install_libraries()
@@ -118,7 +126,8 @@ def load_config():
                 for k, v in default_config.items():
                     if k not in config: config[k] = v
                 return config
-        except Exception: 
+        except Exception as e: 
+            logging.error(f"Gagal load_config: {e}")
             return default_config
     return default_config
 
@@ -126,19 +135,24 @@ def save_config(config_data):
     try:
         with open(CONFIG_FILE, "w") as f: json.dump(config_data, f, indent=4)
         return True
-    except Exception: return False
+    except Exception as e: 
+        logging.error(f"Gagal save_config: {e}")
+        return False
 
 def load_memories():
     if os.path.exists(MEMORY_FILE):
         try:
             with open(MEMORY_FILE, "r") as f: return json.load(f)
-        except Exception: return []
+        except Exception as e: 
+            logging.error(f"Gagal load_memories: {e}")
+            return []
     return []
 
 def save_memories(memories_list):
     try:
         with open(MEMORY_FILE, "w") as f: json.dump(memories_list, f, indent=4)
-    except Exception: pass
+    except Exception as e: 
+        logging.error(f"Gagal save_memories: {e}")
 
 def extract_json_robust(text):
     try:
@@ -146,7 +160,8 @@ def extract_json_robust(text):
         if match:
             return json.loads(match.group(0))
         return json.loads(text)
-    except Exception:
+    except Exception as e:
+        logging.error(f"Gagal extract_json_robust: {e} | Teks: {text[:100]}...")
         return {"reply": text, "command": "", "save_memory": "", "send_file": "", "read_url": "", "download": {}}
 
 def setup_provider():
@@ -345,9 +360,11 @@ def send_openrouter_request(config, history, system_instruction, retries):
                     err_msg = err_json.get("error", {}).get("message", str(e))
                 except:
                     err_msg = str(e)
+                logging.error(f"OpenRouter HTTP Error: {err_msg}")
                 return {"reply": f"Terjadi kesalahan API OpenRouter: {err_msg}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
         except Exception as e:
             if attempt == retries - 1:
+                logging.error(f"OpenRouter Fatal Error: {e}")
                 return {"reply": f"Error OpenRouter: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
             
     return {"reply": f"Gagal merespons setelah {retries} percobaan karena server penuh (429 Rate Limit). Coba model lain.", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
@@ -374,8 +391,10 @@ def send_gemini_request(config, history, system_instruction, retries):
             if e.code == 429:
                 time.sleep((attempt + 1) * 3)
                 continue
+            logging.error(f"Gemini HTTPError: {e.code} - {e.reason}")
             return {"reply": f"Terjadi kesalahan API Gemini: {e.code} - {e.reason}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
         except Exception as e:
+            logging.error(f"Gemini Exception: {e}")
             return {"reply": f"Terjadi kesalahan Gemini: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
     return {"reply": "Error: Terlalu banyak request (429).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
 
@@ -404,6 +423,7 @@ def send_ollama_request(config, history, system_instruction):
         content = data.get("message", {}).get("content", "")
         return extract_json_robust(content)
     except Exception as e:
+         logging.error(f"Ollama Error: {e}")
          return {"reply": f"Error Ollama: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
 
 def fetch_url_content(url):
@@ -422,6 +442,7 @@ def fetch_url_content(url):
         text = '\n'.join(chunk for chunk in chunks if chunk)
         return text[:15000] + "\n\n...[Teks dipotong]"
     except Exception as e:
+        logging.error(f"Fetch URL Error ({url}): {e}")
         return f"Gagal membaca URL: {str(e)}"
 
 def start_telegram_bot():
@@ -569,14 +590,25 @@ def start_telegram_bot():
             except subprocess.TimeoutExpired:
                  bot.send_message(chat_id, f"✅ Perintah masih berjalan di latar belakang (Timeout menunggu, tapi proses tetap lanjut).")
             except Exception as e:
+                logging.error(f"Command Eksekusi Error: {e}")
                 bot.send_message(chat_id, f"❌ Gagal: {e}")
             del pending_commands[chat_id]
         elif call.data == "exec_n":
             bot.send_message(chat_id, "🛑 Eksekusi Dibatalkan.")
             del pending_commands[chat_id]
 
-    try: bot.polling(none_stop=True)
-    except Exception as e: print(f"{RED}[Fatal Error]{RESET} Terputus: {e}")
+    while True:
+        try: 
+            bot.polling(none_stop=True)
+            break # Berhenti jika bot di-stop secara normal
+        except KeyboardInterrupt:
+            print(f"\n{YELLOW}Bot dihentikan oleh pengguna (Ctrl+C).{RESET}")
+            break
+        except Exception as e: 
+            logging.error(f"Telegram Bot Polling Terputus: {e}")
+            print(f"\n{RED}[Error]{RESET} Koneksi Terputus: {e}")
+            print(f"{YELLOW}Mencoba menghubungkan kembali dalam 5 detik (Auto-Restart)...{RESET}")
+            time.sleep(5)
 
 def sync_with_github():
     print(f"\n{CYAN}--- Sinkronisasi Otomatis GitHub ---{RESET}")
@@ -605,7 +637,9 @@ def sync_with_github():
         
         if res.returncode == 0: print(f"{GREEN}✅ Sinkronisasi ke GitHub berhasil!{RESET}\n")
         else: print(f"{RED}❌ Gagal Push. Pastikan koneksi & Autentikasi GitHub sudah benar.{RESET}\n")
-    except Exception as e: print(f"{RED}❌ Terjadi kesalahan saat sinkronisasi: {e}{RESET}\n")
+    except Exception as e: 
+        logging.error(f"GitHub Sync Error: {e}")
+        print(f"{RED}❌ Terjadi kesalahan saat sinkronisasi: {e}{RESET}\n")
 
 # Variabel global untuk memastikan splash screen hanya dipanggil sekali
 has_run_splash = False
