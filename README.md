@@ -1,58 +1,71 @@
-<h1 align="center">🧠 Universal AI Agent Architecture</h1>
+<h1 align="center"> Autonomous AI Agent</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Architecture-Modular-black?style=for-the-badge&logo=databricks&logoColor=white" alt="Architecture">
+  <img src="https://img.shields.io/badge/Platform-Termux%20%7C%20Windows%20%7C%20Linux-black?style=for-the-badge&logo=terminal&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/AI-Multi%20Provider-orange?style=for-the-badge" alt="AI">
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
 </p>
 
 <p align="center">
-  <em>Sistem agen AI tingkat lanjut yang mendukung banyak penyedia LLM (OpenRouter, Groq, OpenAI, Gemini, Anthropic, Ollama) dengan kemampuan Fallback dan Memori Persisten.</em>
+  <em>Asisten AI otonom tingkat lanjut berbasis Telegram dengan fitur Web Scraper, Auto-Updater, kontrol perangkat, dan integrasi WhatsApp.</em>
 </p>
 
 ---
 
-## 🚀 Fitur Utama
-- **Multi-Provider Support:** Bebas beralih antar AI provider ternama di dunia.
-- **Auto-Fallback System:** Jika API utama mati/limit, otomatis pindah ke API cadangan.
-- **Smart Retry Logic:** Otomatis mengulang pengiriman (retry) jika server gagal (timeout/500 Error).
-- **Persistent Key-Value Memory:** AI bisa mengingat informasi antar sesi obrolan.
-- **Environment Secrets (.env):** Sangat aman, tanpa hardcode kredensial.
+## ✨ Fitur Unggulan
 
-## ⚙️ Instalasi (Windows / Linux / Termux)
-1. Clone repo ini.
-```bash
-git clone https://github.com/username/ai-agent.git
-cd ai-agent
-```
-
-### 2. Jalankan Program
-Program ini dirancang untuk melakukan **Auto-Install** semua *library* Python yang dibutuhkan (`pyTelegramBotAPI`, `requests`, `beautifulsoup4`) saat pertama kali dijalankan.
-
-```bash
-python bot.py
-```
-
-### 3. Setup Melalui Dashboard Interaktif
-Setelah program berjalan, Anda akan disambut oleh **Menu Dashboard Utama**. Lakukan langkah berikut:
-1. Pilih menu **Setup Provider AI** (Pilih Gemini, Ollama, atau OpenRouter).
-2. Masukkan **API Key** (Gemini/OpenRouter) dan **Telegram Bot Token** dari @BotFather.
-3. Kembali ke menu utama dan pilih **Jalankan Bot**.
-
-Bot sekarang sudah aktif dan siap menerima perintah dari Telegram! 🎉
+* **🧠 Multi-Provider AI**: Mendukung **OpenAI**, **Groq**, **Gemini**, **OpenRouter**, dan **Ollama** (Offline).
+* **💻 Command Execution**: Bot dapat mengeksekusi perintah shell/terminal di perangkat Anda (dengan persetujuan).
+* **🌐 Web & Downloader**: Mengekstrak teks dari URL dan mendownload file gambar otomatis.
+* **💾 Memori Cerdas**: Mengingat identitas dan preferensi Anda antar sesi obrolan.
+* **🔄 Lifetime Auto-Update**: Bot mengecek update GitHub di latar belakang dan merestart dirinya sendiri jika ada pembaruan kode.
 
 ---
 
-## 📂 Struktur Direktori
+## 🚀 Panduan Instalasi
 
+<details>
+<summary><b>👉 Klik disini untuk melihat cara instalasi langkah demi langkah</b></summary>
+
+<br>
+
+### Langkah 1: Clone Repository
+Unduh kode sumber ke perangkat Anda.
+```bash
+git clone https://github.com/keyfreshgmail-byte/Autonomus-Agent.git
+cd Autonomus-Agent
+```
+
+### Langkah 2: Jalankan Autopilot
+Sistem dilengkapi dengan fitur **Auto-Installer**. Anda tidak perlu repot menginstal library secara manual, cukup jalankan:
+```bash
+python bot.py
+```
+*(Sistem akan otomatis menginstal library `pyTelegramBotAPI`, `requests`, `beautifulsoup4`, dll).*
+
+### Langkah 3: Setup Melalui Dashboard
+Saat pertama kali berjalan, layar terminal akan menampilkan **Menu Dashboard Utama**.
+1. Ketik `2` untuk masuk ke menu **Setup Provider AI**.
+2. Pilih AI yang ingin digunakan (misal: Gemini, Groq, atau OpenAI) dan masukkan **API Key** serta **Telegram Bot Token**.
+3. Ketik `0` untuk kembali ke menu awal.
+4. Ketik `1` untuk menyalakan Bot. Selesai! 🎉
+
+</details>
+
+---
+
+## 📂 Struktur Proyek
+
+Proyek ini diatur agar tetap rapi, bersih, dan modular.
 ```text
 📁 Autonomus-Agent/
-├── bot.py          # Core logic dan integrasi Telegram Bot
-├── ui.py           # Konfigurasi antarmuka (Splash Screen & ASCII Art)
-├── .gitignore      # Mengecualikan file sensitif (konfigurasi & log) dari GitHub
-├── config.json     # (Auto-generated) Menyimpan API Key & Token
-├── memory.json     # (Auto-generated) Menyimpan ingatan jangka panjang AI
-└── error.log       # (Auto-generated) Menyimpan log jika terjadi error
+├── 📄 bot.py          # Entry point utama & manajemen Telegram Bot
+├── 📄 ui.py           # Engine antarmuka CLI (Animasi, Warna, & Splash Screen)
+├── 📄 .gitignore      # Aturan keamanan untuk memblokir file rahasia/sampah
+├── 🔒 config.json     # (Lokal) Konfigurasi kredensial & API Key pengguna
+├── 🔒 memory.json     # (Lokal) Database ingatan jangka panjang AI
+└── 🔒 error.log       # (Lokal) Catatan error sistem (Auto-generated)
 ```
 
 ---
