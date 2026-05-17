@@ -25,10 +25,18 @@
 
 ## 🚀 Panduan Instalasi
 
-<details>
-<summary><b>👉 Klik disini untuk melihat cara instalasi langkah demi langkah</b></summary>
+### 🔥 Cara Paling Cepat (1-Click Install untuk Termux)
+Salin satu baris perintah di bawah ini, lalu tempelkan (paste) ke dalam aplikasi Termux Anda dan tekan Enter:
+
+```bash
+curl -sL https://raw.githubusercontent.com/keyfreshgmail-byte/Autonomus-Agent/main/install.sh | bash
+```
+*(Perintah di atas akan otomatis mengunduh sistem, memasang Python, Node.js, dan menjalankan bot tanpa Anda perlu mengetik apa pun lagi).*
 
 <br>
+
+<details>
+<summary><b>👉 Klik disini untuk melihat cara instalasi manual (Langkah demi langkah)</b></summary>
 
 ### Langkah 1: Clone Repository
 Unduh kode sumber ke perangkat Anda.
@@ -52,6 +60,35 @@ Saat pertama kali berjalan, layar terminal akan menampilkan **Menu Dashboard Uta
 4. Ketik `1` untuk menyalakan Bot. Selesai! 🎉
 
 </details>
+
+---
+
+## ☁️ Panduan Deploy ke VPS (24/7 Standby)
+
+Agar bot menyala nonstop tanpa memakan kuota/baterai HP, Anda bisa menjalankannya di VPS Linux (Ubuntu/Debian).
+
+### 1. Install Dependensi Dasar VPS
+Buka terminal/SSH VPS Anda, lalu jalankan:
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install python3 python3-pip git tmux nodejs npm -y
+```
+
+### 2. Clone & Install
+```bash
+git clone https://github.com/keyfreshgmail-byte/Autonomus-Agent.git
+cd Autonomus-Agent
+pip3 install -r requirements.txt
+```
+
+### 3. Jalankan di Latar Belakang (Background)
+Gunakan `tmux` agar program tidak terhenti saat Anda menutup koneksi SSH VPS:
+```bash
+tmux new -s agent
+python3 bot.py
+```
+* **Detach (Keluar terminal tanpa mematikan bot):** Tekan `Ctrl + B`, lalu lepaskan, dan tekan `D`.
+* **Attach (Melihat log bot kembali):** Ketik `tmux attach -t agent`.
 
 ---
 

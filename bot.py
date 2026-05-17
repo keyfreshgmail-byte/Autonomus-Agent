@@ -173,7 +173,8 @@ def load_config():
         "openai_api_key": "",
         "openai_model": "gpt-4o-mini",
         "groq_api_key": "",
-        "groq_model": "llama-3.3-70b-versatile"
+        "groq_model": "llama-3.3-70b-versatile",
+        "admin_id": ""
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -277,6 +278,11 @@ def setup_gemini_credentials(config=None):
     token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
     if token == '0': return
     if token: config["telegram_token"] = token
+    
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi Gemini disimpan!\n")
 
@@ -298,6 +304,10 @@ def setup_openrouter_credentials(config=None):
     token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
     if token: config["telegram_token"] = token
     
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi OpenRouter disimpan!\n")
 
@@ -318,6 +328,11 @@ def setup_openai_credentials(config=None):
     if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
     token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
     if token: config["telegram_token"] = token
+    
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi OpenAI disimpan!\n")
 
@@ -338,6 +353,11 @@ def setup_groq_credentials(config=None):
     if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
     token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
     if token: config["telegram_token"] = token
+    
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi Groq disimpan!\n")
 
@@ -361,6 +381,10 @@ def setup_ollama_config(config=None):
     token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
     if token: config["telegram_token"] = token
             
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi Ollama disimpan!\n")
 
@@ -669,13 +693,23 @@ def start_telegram_bot():
     print(f"{WHITE}➤ Model    : {YELLOW}{active_model}{RESET}")
     print(f"{WHITE}➤ Status   : {GREEN}Standby & Menunggu instruksi...{RESET}\n")
 
+    admin_id_config = str(config.get("admin_id", "")).strip()
+
     @bot.message_handler(commands=['start', 'clear'])
     def handle_commands(message):
+        if admin_id_config and admin_id_config.upper() != "ALL" and str(message.from_user.id) != admin_id_config:
+            bot.reply_to(message, "⛔ Akses Ditolak: Bot ini bersifat Private.")
+            return
         user_histories[message.chat.id] = []
         bot.reply_to(message, "Riwayat dibersihkan. Agent siap!")
 
     @bot.message_handler(func=lambda message: True)
     def handle_message(message):
+        if admin_id_config and admin_id_config.upper() != "ALL" and str(message.from_user.id) != admin_id_config:
+            bot.send_message(message.chat.id, "⛔ Akses Ditolak: Anda tidak diizinkan menggunakan bot ini.")
+            print(f"{RED}[Akses Ditolak]{RESET} ID {message.from_user.id} ({message.from_user.first_name}) mencoba chat.")
+            return
+            
         chat_id = message.chat.id
         user_input = message.text
 
@@ -758,6 +792,10 @@ def start_telegram_bot():
 
     @bot.callback_query_handler(func=lambda call: True)
     def callback_query(call):
+        if admin_id_config and admin_id_config.upper() != "ALL" and str(call.from_user.id) != admin_id_config:
+            bot.answer_callback_query(call.id, "⛔ Akses Ditolak!", show_alert=True)
+            return
+            
         chat_id = call.message.chat.id
         message_id = call.message.message_id
 
