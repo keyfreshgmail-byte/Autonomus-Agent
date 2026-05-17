@@ -1,43 +1,29 @@
-# 🤖 Autonomous Termux Agent
+<h1 align="center">🧠 Universal AI Agent Architecture</h1>
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python&logoColor=white)
-![Termux](https://img.shields.io/badge/Platform-Termux%20%7C%20Linux-black?logo=terminal&logoColor=white)
-![AI](https://img.shields.io/badge/AI-Gemini%20%7C%20Ollama%20%7C%20OpenRouter-orange)
-![License](https://img.shields.io/badge/License-MIT-green)
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Architecture-Modular-black?style=for-the-badge&logo=databricks&logoColor=white" alt="Architecture">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+</p>
 
-**Autonomous Termux Agent** adalah bot Telegram cerdas yang berjalan di lingkungan Termux (Android) atau PC. Bot ini tidak hanya sekadar membalas chat, tetapi juga dapat berpikir secara otonom untuk mengeksekusi perintah terminal, membaca isi website, mengirim file, dan mengontrol WhatsApp secara mandiri.
-
----
-
-## ✨ Fitur Utama
-
-- **🧠 Multi-Provider AI**: Mendukung **Google Gemini** (Cloud), **Ollama** (Local Offline AI), dan **OpenRouter** (Claude, Llama, dll).
-- **💻 Eksekusi Perintah Terminal**: AI dapat memberikan dan mengeksekusi perintah shell (bash/cmd) secara langsung melalui persetujuan di Telegram.
-- **📱 Integrasi WhatsApp (Mudslide)**: AI dapat mengirim pesan dan gambar ke WhatsApp pengguna lain secara otomatis.
-- **🌐 Web Scraper & Downloader**: Mampu membaca isi artikel/website langsung dari URL dan mendownload gambar/file dari internet ke penyimpanan lokal.
-- **💾 Memori Jangka Panjang**: Bot dapat mengingat fakta-fakta penting tentang Anda ke dalam file `memory.json`.
-- **🔄 Auto-Sync GitHub**: Dilengkapi fitur bawaan untuk melakukan *Pull* dan *Push* ke GitHub langsung dari UI Terminal, tanpa harus mengetik perintah git manual.
-- **🛡️ Resilien & Auto-Restart**: Sistem *error handling* yang kuat dengan *auto-restart* jika koneksi terputus.
+<p align="center">
+  <em>Sistem agen AI tingkat lanjut yang mendukung banyak penyedia LLM (OpenRouter, Groq, OpenAI, Gemini, Anthropic, Ollama) dengan kemampuan Fallback dan Memori Persisten.</em>
+</p>
 
 ---
 
-## ⚙️ Persyaratan Sistem
+## 🚀 Fitur Utama
+- **Multi-Provider Support:** Bebas beralih antar AI provider ternama di dunia.
+- **Auto-Fallback System:** Jika API utama mati/limit, otomatis pindah ke API cadangan.
+- **Smart Retry Logic:** Otomatis mengulang pengiriman (retry) jika server gagal (timeout/500 Error).
+- **Persistent Key-Value Memory:** AI bisa mengingat informasi antar sesi obrolan.
+- **Environment Secrets (.env):** Sangat aman, tanpa hardcode kredensial.
 
-- **Python 3.8+**
-- **Git** (Untuk sinkronisasi & instalasi)
-- **Node.js** (Opsional, khusus untuk fitur WhatsApp CLI / Mudslide)
-- **Termux:API** (Opsional, jika dijalankan di Termux Android untuk cek baterai/hardware)
-
----
-
-## 🚀 Cara Instalasi
-
-Ikuti langkah-langkah berikut untuk menjalankan bot ini di terminal/Termux Anda:
-
-### 1. Clone Repository
+## ⚙️ Instalasi (Windows / Linux / Termux)
+1. Clone repo ini.
 ```bash
-git clone https://github.com/keyfreshgmail-byte/Autonomus-Agent.git
-cd Autonomus-Agent
+git clone https://github.com/username/ai-agent.git
+cd ai-agent
 ```
 
 ### 2. Jalankan Program

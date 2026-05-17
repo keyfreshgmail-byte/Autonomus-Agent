@@ -34,7 +34,7 @@ def install_libraries():
         except ImportError:
             print(f"Library {pkg:<25} [{YELLOW}Menginstall...{RESET}]", end="\r")
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "--quiet"])
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", pkg, "--quiet"])
                 print(f"Library {pkg:<25} [{GREEN}✓{RESET}]          ")
             except Exception as e:
                 print(f"Library {pkg:<25} [{RED}✗{RESET}]")
