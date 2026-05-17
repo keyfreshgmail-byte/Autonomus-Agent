@@ -106,28 +106,38 @@ def background_update_checker():
 # 2. FITUR AUTO-CHECK (TERMUX:API & WA CLI)
 # ==========================================
 def check_dependencies():
-    if shutil.which("termux-battery-status"):
-        print(f"Package Termux:API            [{GREEN}✓{RESET}]")
-    else:
-        print(f"Package Termux:API            [{YELLOW}Menginstall...{RESET}]", end="\r")
-        subprocess.run("pkg install termux-api -y", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"Package Termux:API            [{GREEN}✓{RESET}]          ")
+    is_windows = os.name == 'nt'
+    is_termux = 'com.termux' in os.environ.get('PREFIX', '') or (shutil.which('pkg') and not is_windows)
 
-    try:
-        res = subprocess.run("termux-battery-status", shell=True, capture_output=True, text=True, timeout=3)
-        if res.returncode == 0 and len(res.stdout.strip()) > 5:
-            print(f"Koneksi APK Termux:API        [{GREEN}✓{RESET}]")
+    if is_termux:
+        if shutil.which("termux-battery-status"):
+            print(f"Package Termux:API            [{GREEN}✓{RESET}]")
         else:
-             print(f"Koneksi APK Termux:API        [{RED}✗{RESET}] (Pastikan APK terinstall)")
-    except Exception:
-        print(f"Koneksi APK Termux:API        [{RED}?{RESET}]")
+            print(f"Package Termux:API            [{YELLOW}Menginstall...{RESET}]", end="\r")
+            subprocess.run("pkg install termux-api -y", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"Package Termux:API            [{GREEN}✓{RESET}]          ")
+
+        try:
+            res = subprocess.run("termux-battery-status", shell=True, capture_output=True, text=True, timeout=3)
+            if res.returncode == 0 and len(res.stdout.strip()) > 5:
+                print(f"Koneksi APK Termux:API        [{GREEN}✓{RESET}]")
+            else:
+                 print(f"Koneksi APK Termux:API        [{RED}✗{RESET}] (Pastikan APK terinstall)")
+        except Exception:
+            print(f"Koneksi APK Termux:API        [{RED}?{RESET}]")
+    else:
+        os_name = "Windows PC" if is_windows else "Linux / VPS"
+        print(f"Sistem Operasi                [{GREEN}{os_name}{RESET}] (Termux API dilewati)")
 
     if shutil.which("node") and shutil.which("npx"):
         print(f"Node.js & NPX (Untuk WA)      [{GREEN}✓{RESET}]")
     else:
-        print(f"Node.js & NPX (Untuk WA)      [{YELLOW}Menginstall...{RESET}]", end="\r")
-        subprocess.run("pkg install nodejs -y", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"Node.js & NPX (Untuk WA)      [{GREEN}✓{RESET}]          ")
+        if is_termux:
+            print(f"Node.js & NPX (Untuk WA)      [{YELLOW}Menginstall...{RESET}]", end="\r")
+            subprocess.run("pkg install nodejs -y", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"Node.js & NPX (Untuk WA)      [{GREEN}✓{RESET}]          ")
+        else:
+            print(f"Node.js & NPX (Untuk WA)      [{RED}✗{RESET}] (Harap install Node.js manual untuk fitur WA)")
 
     try:
         res = subprocess.run("yes | npx mudslide me", shell=True, capture_output=True, text=True, timeout=10)
@@ -174,6 +184,12 @@ def load_config():
         "openai_model": "gpt-4o-mini",
         "groq_api_key": "",
         "groq_model": "llama-3.3-70b-versatile",
+        "anthropic_api_key": "",
+        "anthropic_model": "claude-3-haiku-20240320",
+        "together_api_key": "",
+        "together_model": "meta-llama/Llama-3-8b-chat-hf",
+        "cohere_api_key": "",
+        "cohere_model": "command-r-plus",
         "admin_id": ""
     }
     
@@ -231,9 +247,12 @@ def setup_provider():
     print("3. OpenRouter (Gemma 4, Claude, dll)")
     print("4. OpenAI (ChatGPT)")
     print("5. Groq (Llama 3, Mixtral - Super Cepat)")
+    print("6. Anthropic (Claude 3.5 Sonnet, dll)")
+    print("7. Together AI (Llama 3, Qwen, dll)")
+    print("8. Cohere (Command R+)")
     print(f"{RED}0. Batal / Kembali ke Menu Utama{RESET}")
     
-    pilihan = input(f"\n{GREEN}Pilih provider (0-5):{RESET} ").strip()
+    pilihan = input(f"\n{GREEN}Pilih provider (0-8):{RESET} ").strip()
     os.system('cls' if os.name == 'nt' else 'clear')
     if pilihan == '0':
         print("Dibatalkan.")
@@ -263,6 +282,21 @@ def setup_provider():
         save_config(config)
         print(f"{BLUE}[Berhasil]{RESET} Provider diubah ke Groq.")
         setup_groq_credentials(config)
+    elif pilihan == '6':
+        config["provider"] = "anthropic"
+        save_config(config)
+        print(f"{BLUE}[Berhasil]{RESET} Provider diubah ke Anthropic.")
+        setup_anthropic_credentials(config)
+    elif pilihan == '7':
+        config["provider"] = "together"
+        save_config(config)
+        print(f"{BLUE}[Berhasil]{RESET} Provider diubah ke Together AI.")
+        setup_together_credentials(config)
+    elif pilihan == '8':
+        config["provider"] = "cohere"
+        save_config(config)
+        print(f"{BLUE}[Berhasil]{RESET} Provider diubah ke Cohere.")
+        setup_cohere_credentials(config)
     else:
         print(f"{RED}[Error]{RESET} Pilihan tidak valid.")
 
@@ -361,6 +395,81 @@ def setup_groq_credentials(config=None):
     save_config(config)
     print(f"{BLUE}[Selesai]{RESET} Konfigurasi Groq disimpan!\n")
 
+def setup_anthropic_credentials(config=None):
+    if not config: config = load_config()
+    print(f"\n{CYAN}--- Setup Anthropic & Telegram ---{RESET}")
+    if config.get("anthropic_api_key"): print(f"{YELLOW}Anthropic API Key sudah tersimpan.{RESET}")
+    key = input(f"{GREEN}Masukkan Anthropic API Key (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if key == '0': return
+    if key: config["anthropic_api_key"] = key
+    
+    curr_model = config.get("anthropic_model", "claude-3-haiku-20240320")
+    print(f"\n{YELLOW}Model Anthropic saat ini: {curr_model}{RESET}")
+    model = input(f"{GREEN}Masukkan Model (kosongkan untuk tetap {curr_model}, '0' batal):{RESET} ").strip()
+    if model == '0': return
+    if model: config["anthropic_model"] = model
+            
+    if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
+    token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
+    if token: config["telegram_token"] = token
+    
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
+    save_config(config)
+    print(f"{BLUE}[Selesai]{RESET} Konfigurasi Anthropic disimpan!\n")
+
+def setup_together_credentials(config=None):
+    if not config: config = load_config()
+    print(f"\n{CYAN}--- Setup Together AI & Telegram ---{RESET}")
+    if config.get("together_api_key"): print(f"{YELLOW}Together API Key sudah tersimpan.{RESET}")
+    key = input(f"{GREEN}Masukkan Together API Key (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if key == '0': return
+    if key: config["together_api_key"] = key
+    
+    curr_model = config.get("together_model", "meta-llama/Llama-3-8b-chat-hf")
+    print(f"\n{YELLOW}Model Together saat ini: {curr_model}{RESET}")
+    model = input(f"{GREEN}Masukkan Model (kosongkan untuk tetap {curr_model}, '0' batal):{RESET} ").strip()
+    if model == '0': return
+    if model: config["together_model"] = model
+            
+    if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
+    token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
+    if token: config["telegram_token"] = token
+    
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
+    save_config(config)
+    print(f"{BLUE}[Selesai]{RESET} Konfigurasi Together AI disimpan!\n")
+
+def setup_cohere_credentials(config=None):
+    if not config: config = load_config()
+    print(f"\n{CYAN}--- Setup Cohere & Telegram ---{RESET}")
+    if config.get("cohere_api_key"): print(f"{YELLOW}Cohere API Key sudah tersimpan.{RESET}")
+    key = input(f"{GREEN}Masukkan Cohere API Key (kosongkan jika tidak ganti, '0' batal):{RESET} ").strip()
+    if key == '0': return
+    if key: config["cohere_api_key"] = key
+    
+    curr_model = config.get("cohere_model", "command-r-plus")
+    print(f"\n{YELLOW}Model Cohere saat ini: {curr_model}{RESET}")
+    model = input(f"{GREEN}Masukkan Model (kosongkan untuk tetap {curr_model}, '0' batal):{RESET} ").strip()
+    if model == '0': return
+    if model: config["cohere_model"] = model
+            
+    if config.get("telegram_token"): print(f"\n{YELLOW}Telegram Bot Token sudah tersimpan.{RESET}")
+    token = input(f"{GREEN}Masukkan Telegram Bot Token (kosongkan jika tidak ganti):{RESET} ").strip()
+    if token: config["telegram_token"] = token
+    
+    if config.get("admin_id"): print(f"\n{YELLOW}Admin ID Telegram sudah tersimpan: {config['admin_id']}{RESET}")
+    admin_id = input(f"{GREEN}Masukkan ID Telegram Anda (kosongkan jika tidak ganti, ketik 'ALL' untuk publik):{RESET} ").strip()
+    if admin_id: config["admin_id"] = admin_id
+    
+    save_config(config)
+    print(f"{BLUE}[Selesai]{RESET} Konfigurasi Cohere disimpan!\n")
+
 def setup_ollama_config(config=None):
     if not config: config = load_config()
     print(f"\n{CYAN}--- Setup Ollama & Telegram ---{RESET}")
@@ -409,6 +518,12 @@ def setup_model():
         setup_openai_credentials(config)
     elif config["provider"] == "groq":
         setup_groq_credentials(config)
+    elif config["provider"] == "anthropic":
+        setup_anthropic_credentials(config)
+    elif config["provider"] == "together":
+        setup_together_credentials(config)
+    elif config["provider"] == "cohere":
+        setup_cohere_credentials(config)
     else:
         setup_ollama_config(config)
 
@@ -457,6 +572,12 @@ def send_ai_request(history, retries=3):
         return send_openai_request(config, history, system_instruction, retries)
     elif provider == "groq":
         return send_groq_request(config, history, system_instruction, retries)
+    elif provider == "anthropic":
+        return send_anthropic_request(config, history, system_instruction, retries)
+    elif provider == "together":
+        return send_together_request(config, history, system_instruction, retries)
+    elif provider == "cohere":
+        return send_cohere_request(config, history, system_instruction, retries)
     else:
         return send_ollama_request(config, history, system_instruction)
 
@@ -609,6 +730,89 @@ def send_groq_request(config, history, system_instruction, retries):
                 return {"reply": f"Error Groq: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
     return {"reply": "Gagal merespons (Groq).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
 
+def send_anthropic_request(config, history, system_instruction, retries):
+    api_key = config.get("anthropic_api_key", "").strip()
+    model_name = config.get("anthropic_model", "claude-3-haiku-20240320")
+    
+    messages = []
+    for msg in history:
+        role = "assistant" if msg["role"] == "model" else "user"
+        content = msg["parts"][0]["text"]
+        messages.append({"role": role, "content": content})
+
+    url = "https://api.anthropic.com/v1/messages"
+    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+    payload = {"model": model_name, "system": system_instruction, "messages": messages, "max_tokens": 1024, "temperature": 0.7}
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            content = data['content'][0]['text']
+            return extract_json_robust(content)
+        except Exception as e:
+            if attempt == retries - 1:
+                logging.error(f"Anthropic Error: {e}")
+                return {"reply": f"Error Anthropic: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+    return {"reply": "Gagal merespons (Anthropic).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+
+def send_together_request(config, history, system_instruction, retries):
+    api_key = config.get("together_api_key", "").strip()
+    model_name = config.get("together_model", "meta-llama/Llama-3-8b-chat-hf")
+    
+    messages = [{"role": "system", "content": system_instruction}]
+    for msg in history:
+        role = "assistant" if msg["role"] == "model" else "user"
+        content = msg["parts"][0]["text"]
+        messages.append({"role": role, "content": content})
+
+    url = "https://api.together.xyz/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model_name, "messages": messages, "temperature": 0.7}
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            content = data['choices'][0]['message']['content']
+            return extract_json_robust(content)
+        except Exception as e:
+            if attempt == retries - 1:
+                logging.error(f"Together Error: {e}")
+                return {"reply": f"Error Together: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+    return {"reply": "Gagal merespons (Together).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+
+def send_cohere_request(config, history, system_instruction, retries):
+    api_key = config.get("cohere_api_key", "").strip()
+    model_name = config.get("cohere_model", "command-r-plus")
+    
+    chat_history = []
+    for msg in history[:-1]:
+        role = "CHATBOT" if msg["role"] == "model" else "USER"
+        content = msg["parts"][0]["text"]
+        chat_history.append({"role": role, "message": content})
+        
+    prompt = history[-1]["parts"][0]["text"] if history else "Halo"
+
+    url = "https://api.cohere.ai/v1/chat"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model_name, "message": prompt, "chat_history": chat_history, "preamble": system_instruction, "temperature": 0.7}
+    
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            data = response.json()
+            content = data['text']
+            return extract_json_robust(content)
+        except Exception as e:
+            if attempt == retries - 1:
+                logging.error(f"Cohere Error: {e}")
+                return {"reply": f"Error Cohere: {str(e)}", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+    return {"reply": "Gagal merespons (Cohere).", "command": "", "save_memory": "", "send_file": "", "read_url": ""}
+
 def send_ollama_request(config, history, system_instruction):
     ollama_url = config.get("ollama_url", DEFAULT_OLLAMA_URL).rstrip("/")
     model_name = config.get("ollama_model", DEFAULT_OLLAMA_MODEL)
@@ -687,6 +891,12 @@ def start_telegram_bot():
     elif config['provider'] == 'openrouter': active_model = config['openrouter_model']
     elif config['provider'] == 'openai': active_model = config['openai_model']
     elif config['provider'] == 'groq': active_model = config['groq_model']
+    elif config['provider'] == 'anthropic': active_model = config['anthropic_model']
+    elif config['provider'] == 'together': active_model = config['together_model']
+    elif config['provider'] == 'cohere': active_model = config['cohere_model']
+    elif config['provider'] == 'anthropic': active_model = config['anthropic_model']
+    elif config['provider'] == 'together': active_model = config['together_model']
+    elif config['provider'] == 'cohere': active_model = config['cohere_model']
     else: active_model = config['ollama_model']
     
     print(f"\n{WHITE}➤ Provider : {YELLOW}{config['provider'].upper()}{RESET}")
@@ -900,7 +1110,7 @@ def main():
         print(f"{CYAN}│{YELLOW}{'MENU DASHBOARD UTAMA'.center(term_width - 2)}{CYAN}│{RESET}")
         print(f"{CYAN}└" + "─" * (term_width - 2) + f"┘{RESET}")
         print(f" {WHITE}1.{RESET} Jalankan Bot {GREEN}[Aktif: {prov}]{RESET}")
-        print(f" {WHITE}2.{RESET} Setup Provider AI (Gemini / Ollama / OpenRouter)")
+        print(f" {WHITE}2.{RESET} Setup Provider AI (8 Pilihan Provider)")
         print(f" {WHITE}3.{RESET} Ganti Model Spesifik")
         print(f" {WHITE}4.{RESET} Sinkronisasi ke GitHub (Auto Pull & Push)")
         print(f" {WHITE}5.{RESET} Keluar")
